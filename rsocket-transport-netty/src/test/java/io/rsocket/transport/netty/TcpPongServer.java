@@ -37,6 +37,7 @@ public final class TcpPongServer {
     }
     serverRSocketFactory
         .frameDecoder(PayloadDecoder.ZERO_COPY)
+        .errorConsumer(Throwable::printStackTrace)
         .acceptor(new PingHandler())
         .transport(TcpServerTransport.create(port))
         .start()
