@@ -4,6 +4,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
+
 import java.nio.charset.StandardCharsets;
 
 public class SetupFrameFlyweight {
@@ -90,7 +91,9 @@ public class SetupFrameFlyweight {
     length = ByteBufUtil.utf8Bytes(dataMimeType);
     header.writeByte(length);
     ByteBufUtil.writeUtf8(header, dataMimeType);
-    if (metadata != null) {
+    if (data == Unpooled.EMPTY_BUFFER && metadata == Unpooled.EMPTY_BUFFER) {
+      return header;
+    } else if (metadata != null) {
       return DataAndMetadataFlyweight.encode(allocator, header, metadata, data);
     } else {
       return DataAndMetadataFlyweight.encodeOnlyData(allocator, header, data);
