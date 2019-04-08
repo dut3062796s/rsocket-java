@@ -12,7 +12,7 @@ class Tuple2ByteBufTest {
   public void test() {
     ByteBuf one = ByteBufUtil.writeUtf8(allocator, "_string one_");
     ByteBuf two = ByteBufUtil.writeUtf8(allocator, "_string two_");
-    ByteBuf byteBuf = Tuple2ByteBuf.create(allocator, one, two);
+    ByteBuf byteBuf = TupleByteBuffs.of(allocator, one, two);
     String s = ByteBufUtil.prettyHexDump(byteBuf);
     System.out.println(s);
     short unsignedByte = byteBuf.getUnsignedByte(12);

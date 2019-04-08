@@ -1,24 +1,18 @@
 package io.rsocket.buffer;
 
-import io.netty.buffer.AbstractReferenceCountedByteBuf;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.util.ReferenceCountUtil;
-import org.agrona.BufferUtil;
-
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
-import java.nio.channels.ScatteringByteChannel;
 import java.nio.charset.Charset;
-import java.util.Objects;
+import org.agrona.BufferUtil;
 
-public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
+class Tuple2ByteBuf extends AbstractTupleByteBuf {
   private static final int MEMORY_CACHE_ALIGNMENT = 64;
 
   private static final long ONE_MASK = 0x100000000L;
@@ -26,32 +20,20 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
   private static final long MASK = 0x700000000L;
   private static final boolean CHECK_BOUNDS = true;
   private static final ByteBuffer EMPTY_NIO_BUFFER = Unpooled.EMPTY_BUFFER.nioBuffer();
-  private int capacity;
-  private ByteBuf one;
-  private ByteBuf two;
-  private ByteBufAllocator allocator;
-  private int oneReadIndex;
-  private int twoReadIndex;
-  private int oneReadableBytes;
-  private int twoReadableBytes;
-  private int twoRelativeIndex;
 
-  Tuple2ByteBuf() {
-    super(Integer.MAX_VALUE);
-  }
+  private final ByteBuf one;
+  private final ByteBuf two;
+  private final int oneReadIndex;
+  private final int twoReadIndex;
+  private final int oneReadableBytes;
+  private final int twoReadableBytes;
+  private final int twoRelativeIndex;
 
-  public static Tuple2ByteBuf create(ByteBufAllocator allocator, ByteBuf one, ByteBuf two) {
-    Tuple2ByteBuf byteBuf = new Tuple2ByteBuf();
-    byteBuf.wrap(allocator, one, two);
-    return byteBuf;
-  }
+  private boolean freed;
 
-  public void wrap(ByteBufAllocator allocator, ByteBuf one, ByteBuf two) {
-    Objects.requireNonNull(allocator);
-    Objects.requireNonNull(one);
-    Objects.requireNonNull(two);
+  Tuple2ByteBuf(ByteBufAllocator allocator, ByteBuf one, ByteBuf two) {
+    super(allocator, one.readableBytes() + two.readableBytes());
 
-    this.allocator = allocator;
     this.one = one;
     this.two = two;
 
@@ -63,9 +45,7 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
 
     this.twoRelativeIndex = oneReadableBytes;
 
-    this.capacity = oneReadableBytes + twoReadableBytes;
-
-    super.writerIndex(capacity);
+    this.freed = false;
   }
 
   public long calculateRelativeIndex(int index) {
@@ -86,355 +66,21 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
     return relativeIndex | mask;
   }
 
-  @Override
-  public int capacity() {
-    return capacity;
-  }
-
-  @Override
-  public ByteBuf capacity(int newCapacity) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int maxCapacity() {
-    return capacity;
-  }
-
-  @Override
-  public ByteBufAllocator alloc() {
-    return allocator;
-  }
-
-  @Override
-  public ByteOrder order() {
-    return ByteOrder.BIG_ENDIAN;
-  }
-
-  @Override
-  public ByteBuf order(ByteOrder endianness) {
-    return this;
-  }
-
-  @Override
-  public ByteBuf unwrap() {
-    throw new UnsupportedOperationException();
+  public ByteBuf getPart(int index) {
+    long ri = calculateRelativeIndex(index);
+    switch ((int) ((ri & MASK) >>> 32L)) {
+      case 0x1:
+        return one;
+      case 0x2:
+        return two;
+      default:
+        throw new IllegalStateException();
+    }
   }
 
   @Override
   public boolean isDirect() {
     return one.isDirect() && two.isDirect();
-  }
-
-  @Override
-  public boolean isReadOnly() {
-    return true;
-  }
-
-  @Override
-  public ByteBuf asReadOnly() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf readerIndex(int readerIndex) {
-    super.readerIndex(readerIndex);
-    return this;
-  }
-
-  @Override
-  public final int writerIndex() {
-    return capacity;
-  }
-
-  @Override
-  public ByteBuf writerIndex(int writerIndex) {
-    return this;
-  }
-
-  @Override
-  public ByteBuf setIndex(int readerIndex, int writerIndex) {
-    return this;
-  }
-
-  @Override
-  public boolean isWritable() {
-    return false;
-  }
-
-  @Override
-  public boolean isWritable(int size) {
-    return false;
-  }
-
-  @Override
-  public ByteBuf clear() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf markWriterIndex() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf resetWriterIndex() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf discardReadBytes() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf discardSomeReadBytes() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf ensureWritable(int minWritableBytes) {
-    return this;
-  }
-
-  @Override
-  public int ensureWritable(int minWritableBytes, boolean force) {
-    return 0;
-  }
-
-  @Override
-  public ByteBuf setBoolean(int index, boolean value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setByte(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setShort(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setShortLE(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setMedium(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setMediumLE(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setInt(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setIntLE(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setLong(int index, long value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setLongLE(int index, long value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setChar(int index, int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setFloat(int index, float value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setDouble(int index, double value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, ByteBuf src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, ByteBuf src, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, ByteBuf src, int srcIndex, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, byte[] src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, byte[] src, int srcIndex, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setBytes(int index, ByteBuffer src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int setBytes(int index, InputStream in, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int setBytes(int index, ScatteringByteChannel in, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int setBytes(int index, FileChannel in, long position, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf setZero(int index, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBoolean(boolean value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeByte(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeShort(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeShortLE(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeMedium(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeMediumLE(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeInt(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeIntLE(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeLong(long value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeLongLE(long value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeChar(int value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeFloat(float value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeDouble(double value) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(ByteBuf src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(ByteBuf src, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(ByteBuf src, int srcIndex, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(byte[] src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(byte[] src, int srcIndex, int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeBytes(ByteBuffer src) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int writeBytes(InputStream in, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int writeBytes(ScatteringByteChannel in, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int writeBytes(FileChannel in, long position, int length) throws IOException {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf writeZero(int length) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public int writeCharSequence(CharSequence sequence, Charset charset) {
-    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -503,211 +149,6 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
         throw new IllegalStateException();
     }
   }
-
-  @Override
-  public boolean hasArray() {
-    return false;
-  }
-
-  @Override
-  public byte[] array() {
-    return new byte[0];
-  }
-
-  @Override
-  public int arrayOffset() {
-    return one.arrayOffset();
-  }
-
-  @Override
-  public boolean hasMemoryAddress() {
-    return false;
-  }
-
-  @Override
-  public long memoryAddress() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public String toString(Charset charset) {
-    StringBuilder builder = new StringBuilder(3);
-    builder.append(one.toString(charset));
-    builder.append(two.toString(charset));
-    return builder.toString();
-  }
-
-  @Override
-  public String toString(int index, int length, Charset charset) {
-    // TODO - make this smarter
-    return toString(charset).substring(index, length);
-  }
-
-  @Override
-  public int compareTo(ByteBuf buffer) {
-    return 0;
-  }
-
-  /// Override
-
-  @Override
-  protected void deallocate() {
-    ReferenceCountUtil.safeRelease(one);
-    ReferenceCountUtil.safeRelease(two);
-  }
-
-  @Override
-  protected byte _getByte(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getByte(index);
-      case 0x2:
-        return two.getByte(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected short _getShort(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getShort(index);
-      case 0x2:
-        return two.getShort(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected short _getShortLE(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getShort(index);
-      case 0x2:
-        return two.getShort(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected int _getUnsignedMedium(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getUnsignedMedium(index);
-      case 0x2:
-        return two.getUnsignedMedium(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected int _getUnsignedMediumLE(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getUnsignedMediumLE(index);
-      case 0x2:
-        return two.getUnsignedMediumLE(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected int _getInt(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getInt(index);
-      case 0x2:
-        return two.getInt(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected int _getIntLE(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getIntLE(index);
-      case 0x2:
-        return two.getIntLE(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected long _getLong(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getLong(index);
-      case 0x2:
-        return two.getLong(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected long _getLongLE(int index) {
-    long ri = calculateRelativeIndex(index);
-    index = (int) (ri & Integer.MAX_VALUE);
-    switch ((int) ((ri & MASK) >>> 32L)) {
-      case 0x1:
-        return one.getLongLE(index);
-      case 0x2:
-        return two.getLongLE(index);
-      default:
-        throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  protected void _setByte(int index, int value) {}
-
-  @Override
-  protected void _setShort(int index, int value) {}
-
-  @Override
-  protected void _setShortLE(int index, int value) {}
-
-  @Override
-  protected void _setMedium(int index, int value) {}
-
-  @Override
-  protected void _setMediumLE(int index, int value) {}
-
-  @Override
-  protected void _setInt(int index, int value) {}
-
-  @Override
-  protected void _setIntLE(int index, int value) {}
-
-  @Override
-  protected void _setLong(int index, long value) {}
-
-  @Override
-  protected void _setLongLE(int index, long value) {}
 
   @Override
   public ByteBuf getBytes(int index, ByteBuf dst, int dstIndex, int length) {
@@ -836,12 +277,40 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
 
   @Override
   public ByteBuf copy(int index, int length) {
-    ByteBuf buffer = allocator.buffer();
+    checkRangeBounds(index, length, capacity);
 
-    buffer.setBytes(oneReadIndex, one);
-    buffer.setBytes(twoReadIndex, two);
+    ByteBuf buffer = allocator.buffer(length);
 
-    return buffer;
+    if (index == 0 && length == capacity) {
+      buffer.writeBytes(one, oneReadIndex, oneReadableBytes);
+      buffer.writeBytes(two, twoReadIndex, twoReadableBytes);
+
+      return buffer;
+    }
+
+    long ri = calculateRelativeIndex(index);
+
+    switch ((int) ((ri & MASK) >>> 32L)) {
+      case 0x1:
+        {
+          int copyLength = Math.min(oneReadableBytes, length);
+          buffer.writeBytes(one, oneReadIndex, copyLength);
+
+          if (length == copyLength) {
+            return buffer;
+          }
+        }
+      case 0x2:
+        {
+          length = length - oneReadableBytes;
+          int copyLength = Math.min(twoReadableBytes, length);
+          buffer.writeBytes(two, twoReadIndex, copyLength);
+
+          return buffer;
+        }
+      default:
+        throw new IllegalStateException();
+    }
   }
 
   @Override
@@ -854,7 +323,7 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
     }
 
     if (readIndex == 0 && length == capacity) {
-      return Tuple2ByteBuf.create(
+      return new Tuple2ByteBuf(
           allocator,
           one.slice(oneReadIndex, oneReadableBytes),
           two.slice(twoReadIndex, twoReadableBytes));
@@ -874,7 +343,7 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
           length -= l;
           if (length != 0) {
             twoSlice = two.slice(twoReadIndex, length);
-            return Tuple2ByteBuf.create(allocator, oneSlice, twoSlice);
+            return new Tuple2ByteBuf(allocator, oneSlice, twoSlice);
           } else {
             return oneSlice;
           }
@@ -886,6 +355,31 @@ public class Tuple2ByteBuf extends AbstractReferenceCountedByteBuf {
       default:
         throw new IllegalStateException();
     }
+  }
+
+  @Override
+  protected void deallocate() {
+    if (freed) {
+      return;
+    }
+
+    freed = true;
+    ReferenceCountUtil.safeRelease(one);
+    ReferenceCountUtil.safeRelease(two);
+  }
+
+  @Override
+  public String toString(Charset charset) {
+    StringBuilder builder = new StringBuilder(3);
+    builder.append(one.toString(charset));
+    builder.append(two.toString(charset));
+    return builder.toString();
+  }
+
+  @Override
+  public String toString(int index, int length, Charset charset) {
+    // TODO - make this smarter
+    return toString(charset).substring(index, length);
   }
 
   @Override

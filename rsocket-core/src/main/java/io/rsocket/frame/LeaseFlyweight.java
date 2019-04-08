@@ -24,7 +24,7 @@ public class LeaseFlyweight {
             .writeInt(ttl)
             .writeInt(numRequests);
 
-    if (metadata == null) {
+    if (metadata == null || metadata == Unpooled.EMPTY_BUFFER) {
       return header;
     } else {
       return DataAndMetadataFlyweight.encodeOnlyMetadata(allocator, header, metadata);

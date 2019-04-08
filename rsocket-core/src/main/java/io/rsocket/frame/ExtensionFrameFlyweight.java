@@ -2,6 +2,7 @@ package io.rsocket.frame;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
+import io.netty.buffer.Unpooled;
 import javax.annotation.Nullable;
 
 public class ExtensionFrameFlyweight {
@@ -22,7 +23,10 @@ public class ExtensionFrameFlyweight {
 
     ByteBuf header = FrameHeaderFlyweight.encode(allocator, streamId, FrameType.EXT, flags);
     header.writeInt(extendedType);
-    if (metadata != null) {
+    if ((data == null || data == Unpooled.EMPTY_BUFFER)
+        && (metadata == null || metadata == Unpooled.EMPTY_BUFFER)) {
+      return header;
+    } else if (metadata != null) {
       return DataAndMetadataFlyweight.encode(allocator, header, metadata, data);
     } else {
       return DataAndMetadataFlyweight.encodeOnlyData(allocator, header, data);
