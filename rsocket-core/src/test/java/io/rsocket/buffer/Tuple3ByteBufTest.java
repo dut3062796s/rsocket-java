@@ -6,7 +6,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import org.junit.Ignore;
 
-//@Ignore
+@Ignore
 public class Tuple3ByteBufTest extends AbstractByteBufTest {
 
   @Override

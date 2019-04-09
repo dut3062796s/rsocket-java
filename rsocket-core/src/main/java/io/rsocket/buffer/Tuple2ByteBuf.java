@@ -160,15 +160,17 @@ class Tuple2ByteBuf extends AbstractTupleByteBuf {
           int l = Math.min(oneReadableBytes - index, length);
           one.getBytes(index, dst, dstIndex, l);
           length -= l;
+          dstIndex += l;
+
           if (length != 0) {
             two.getBytes(twoReadIndex, dst, dstIndex, length);
           }
+
           break;
         }
       case 0x2:
         {
-          int l = Math.min(twoReadableBytes, length);
-          two.getBytes(index, dst, dstIndex, l);
+          two.getBytes(index, dst, dstIndex, length);
           break;
         }
       default:
@@ -194,6 +196,7 @@ class Tuple2ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public ByteBuf getBytes(int index, final OutputStream out, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
@@ -221,6 +224,7 @@ class Tuple2ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public int getBytes(int index, GatheringByteChannel out, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     int read = 0;
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
@@ -249,15 +253,17 @@ class Tuple2ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public int getBytes(int index, FileChannel out, long position, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     int read = 0;
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
       case 0x1:
         {
-          int l = Math.min(oneReadableBytes, length);
+          int l = Math.min(oneReadableBytes - index, length);
           read += one.getBytes(index, out, position, l);
           length -= l;
+          position += l;
           if (length != 0) {
             read += two.getBytes(twoReadIndex, out, position, length);
           }
@@ -289,24 +295,25 @@ class Tuple2ByteBuf extends AbstractTupleByteBuf {
     }
 
     long ri = calculateRelativeIndex(index);
+    index = (int) (ri & Integer.MAX_VALUE);
 
     switch ((int) ((ri & MASK) >>> 32L)) {
       case 0x1:
         {
-          int copyLength = Math.min(oneReadableBytes, length);
-          buffer.writeBytes(one, oneReadIndex, copyLength);
+          int l = Math.min(oneReadableBytes - index, length);
+          buffer.writeBytes(one, index, l);
 
-          if (length == copyLength) {
-            return buffer;
+          length -= l;
+
+          if (length != 0) {
+            buffer.writeBytes(two, twoReadIndex, length);
           }
+
+          return buffer;
         }
       case 0x2:
         {
-          length = length - oneReadableBytes;
-          int copyLength = Math.min(twoReadableBytes, length);
-          buffer.writeBytes(two, twoReadIndex, copyLength);
-
-          return buffer;
+          return buffer.writeBytes(two, index, length);
         }
       default:
         throw new IllegalStateException();

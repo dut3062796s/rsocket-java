@@ -198,6 +198,7 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public ByteBuf getBytes(int index, ByteBuf dst, int dstIndex, int length) {
+    checkRangeBounds(index, length, capacity);
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
@@ -206,13 +207,16 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
           int l = Math.min(oneReadableBytes - index, length);
           one.getBytes(index, dst, dstIndex, l);
           length -= l;
+          dstIndex += l;
+
           if (length != 0) {
             l = Math.min(twoReadableBytes, length);
             two.getBytes(twoReadIndex, dst, dstIndex, l);
             length -= l;
+            dstIndex += l;
+
             if (length != 0) {
-              l = Math.min(threeReadableBytes, length);
-              three.getBytes(threeReadIndex, dst, dstIndex, l);
+              three.getBytes(threeReadIndex, dst, dstIndex, length);
             }
           }
           break;
@@ -222,16 +226,16 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
           int l = Math.min(twoReadableBytes - index, length);
           two.getBytes(index, dst, dstIndex, l);
           length -= l;
+          dstIndex += l;
+
           if (length != 0) {
-            l = Math.min(threeReadableBytes, length);
-            three.getBytes(threeReadIndex, dst, dstIndex, l);
+            three.getBytes(threeReadIndex, dst, dstIndex, length);
           }
           break;
         }
       case 0x4:
         {
-          int l = Math.min(threeReadableBytes, length);
-          three.getBytes(index, dst, dstIndex, l);
+          three.getBytes(index, dst, dstIndex, length);
           break;
         }
       default:
@@ -257,6 +261,7 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public ByteBuf getBytes(int index, final OutputStream out, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
@@ -277,19 +282,18 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
         }
       case 0x2:
         {
-          int l = Math.min(twoReadableBytes, length);
+          int l = Math.min(twoReadableBytes - index, length);
           two.getBytes(index, out, l);
           length -= l;
+
           if (length != 0) {
-            l = Math.min(threeReadableBytes, length);
-            three.getBytes(threeReadIndex, out, l);
+            three.getBytes(threeReadIndex, out, length);
           }
           break;
         }
       case 0x4:
         {
-          int l = Math.min(threeReadableBytes, length);
-          three.getBytes(index, out, l);
+          three.getBytes(index, out, length);
 
           break;
         }
@@ -302,13 +306,14 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public int getBytes(int index, GatheringByteChannel out, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     int read = 0;
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
       case 0x1:
         {
-          int l = Math.min(oneReadableBytes, length);
+          int l = Math.min(oneReadableBytes - index, length);
           read += one.getBytes(index, out, l);
           length -= l;
           if (length != 0) {
@@ -316,27 +321,25 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
             read += two.getBytes(twoReadIndex, out, l);
             length -= l;
             if (length != 0) {
-              l = Math.min(threeReadableBytes, length);
-              read += three.getBytes(threeReadIndex, out, l);
+              read += three.getBytes(threeReadIndex, out, length);
             }
           }
           break;
         }
       case 0x2:
         {
-          int l = Math.min(twoReadableBytes, length);
+          int l = Math.min(twoReadableBytes - index, length);
           read += two.getBytes(index, out, l);
           length -= l;
+
           if (length != 0) {
-            l = Math.min(threeReadableBytes, length);
-            read += three.getBytes(threeReadIndex, out, l);
+            read += three.getBytes(threeReadIndex, out, length);
           }
           break;
         }
       case 0x4:
         {
-          int l = Math.min(threeReadableBytes, length);
-          read += three.getBytes(index, out, l);
+          read += three.getBytes(index, out, length);
 
           break;
         }
@@ -349,20 +352,23 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
 
   @Override
   public int getBytes(int index, FileChannel out, long position, int length) throws IOException {
+    checkRangeBounds(index, length, capacity);
     int read = 0;
     long ri = calculateRelativeIndex(index);
     index = (int) (ri & Integer.MAX_VALUE);
     switch ((int) ((ri & MASK) >>> 32L)) {
       case 0x1:
         {
-          int l = Math.min(oneReadableBytes, length);
+          int l = Math.min(oneReadableBytes - index, length);
           read += one.getBytes(index, out, position, l);
           length -= l;
+          position += l;
 
           if (length != 0) {
             l = Math.min(twoReadableBytes, length);
             read += two.getBytes(twoReadIndex, out, position, l);
             length -= l;
+            position += l;
 
             if (length != 0) {
               read += three.getBytes(threeReadIndex, out, position, length);
@@ -372,9 +378,10 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
         }
       case 0x2:
         {
-          int l = Math.min(twoReadableBytes, length);
+          int l = Math.min(twoReadableBytes - index, length);
           read += two.getBytes(index, out, position, l);
           length -= l;
+          position += l;
 
           if (length != 0) {
             read += three.getBytes(threeReadIndex, out, position, length);
@@ -383,8 +390,7 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
         }
       case 0x4:
         {
-          int l = Math.min(threeReadableBytes, length);
-          read += three.getBytes(index, out, position, l);
+          read += three.getBytes(index, out, position, length);
 
           break;
         }
@@ -410,38 +416,56 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
     }
 
     long ri = calculateRelativeIndex(index);
+    index = (int) (ri & Integer.MAX_VALUE);
 
     switch ((int) ((ri & MASK) >>> 32L)) {
       case 0x1:
         {
-          int copyLength = Math.min(oneReadableBytes, length);
-          buffer.writeBytes(one, oneReadIndex, copyLength);
+          int l = Math.min(oneReadableBytes - index, length);
+          buffer.writeBytes(one, index, l);
+          length -= l;
 
-          if (length == copyLength) {
-            return buffer;
+          if (length != 0) {
+            l = Math.min(twoReadableBytes, length);
+            buffer.writeBytes(two, twoReadIndex, l);
+            length -= l;
+            if (length != 0) {
+              buffer.writeBytes(three, threeReadIndex, length);
+            }
           }
+
+          return buffer;
         }
       case 0x2:
         {
-          length = length - oneReadableBytes;
-          int copyLength = Math.min(twoReadableBytes, length);
-          buffer.writeBytes(two, twoReadIndex, copyLength);
+          int l = Math.min(twoReadableBytes - index, length);
+          buffer.writeBytes(two, index, l);
+          length -= l;
 
-          if (length == copyLength) {
-            return buffer;
+          if (length != 0) {
+            buffer.writeBytes(three, threeReadIndex, length);
           }
+
+          return buffer;
         }
       case 0x4:
         {
-          length = length - twoReadableBytes;
-          int copyLength = Math.min(threeReadableBytes, length);
-          buffer.writeBytes(three, threeReadIndex, copyLength);
+          buffer.writeBytes(three, index, length);
 
           return buffer;
         }
       default:
         throw new IllegalStateException();
     }
+  }
+
+  @Override
+  public ByteBuf retainedSlice() {
+    return new Tuple3ByteBuf(
+        allocator,
+        one.retainedSlice(oneReadIndex, oneReadableBytes),
+        two.retainedSlice(twoReadIndex, twoReadableBytes),
+        three.retainedSlice(threeReadIndex, threeReadableBytes));
   }
 
   @Override
@@ -493,7 +517,7 @@ class Tuple3ByteBuf extends AbstractTupleByteBuf {
           ByteBuf twoSlice;
           ByteBuf threeSlice;
 
-          int l = Math.min(twoReadableBytes, length);
+          int l = Math.min(twoReadableBytes - index, length);
           twoSlice = two.slice(index, l);
           length -= l;
           if (length != 0) {

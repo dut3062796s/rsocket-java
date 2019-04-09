@@ -67,7 +67,7 @@ public class SetupFrameFlyweight {
       flags |= FLAGS_WILL_HONOR_LEASE;
     }
 
-    if (metadata != null) {
+    if (metadata != null && metadata != Unpooled.EMPTY_BUFFER) {
       flags |= FrameHeaderFlyweight.FLAGS_M;
     }
 
@@ -93,7 +93,7 @@ public class SetupFrameFlyweight {
     if ((data == null || data == Unpooled.EMPTY_BUFFER)
         && (metadata == null || metadata == Unpooled.EMPTY_BUFFER)) {
       return header;
-    } else if (metadata != null) {
+    } else if (metadata != null && metadata != Unpooled.EMPTY_BUFFER) {
       return DataAndMetadataFlyweight.encode(allocator, header, metadata, data);
     } else {
       return DataAndMetadataFlyweight.encodeOnlyData(allocator, header, data);

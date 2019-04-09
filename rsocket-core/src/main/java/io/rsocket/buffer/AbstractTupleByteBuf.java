@@ -183,12 +183,6 @@ abstract class AbstractTupleByteBuf extends AbstractReferenceCountedByteBuf {
   }
 
   @Override
-  public ByteBuf readerIndex(int readerIndex) {
-    super.readerIndex(readerIndex);
-    return this;
-  }
-
-  @Override
   public ByteBuf writerIndex(int writerIndex) {
     return this;
   }
@@ -206,16 +200,6 @@ abstract class AbstractTupleByteBuf extends AbstractReferenceCountedByteBuf {
   @Override
   public ByteBuf clear() {
     throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public ByteBuf markWriterIndex() {
-    return this;
-  }
-
-  @Override
-  public ByteBuf resetWriterIndex() {
-    return this;
   }
 
   @Override

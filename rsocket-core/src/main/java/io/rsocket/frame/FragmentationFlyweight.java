@@ -17,7 +17,7 @@ public class FragmentationFlyweight {
     if ((data == null || data == Unpooled.EMPTY_BUFFER)
         && (metadata == null || metadata == Unpooled.EMPTY_BUFFER)) {
       return header;
-    } else if (metadata != null) {
+    } else if (metadata != null && metadata != Unpooled.EMPTY_BUFFER) {
       return DataAndMetadataFlyweight.encode(allocator, header, metadata, data);
     } else {
       return DataAndMetadataFlyweight.encodeOnlyData(allocator, header, data);

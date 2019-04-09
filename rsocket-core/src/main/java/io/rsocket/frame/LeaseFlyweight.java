@@ -15,7 +15,7 @@ public class LeaseFlyweight {
 
     int flags = 0;
 
-    if (metadata != null) {
+    if (metadata != null && metadata != Unpooled.EMPTY_BUFFER) {
       flags |= FrameHeaderFlyweight.FLAGS_M;
     }
 
